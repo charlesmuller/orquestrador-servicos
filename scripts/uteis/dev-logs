@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# scripts/uteis/dev-logs — Atalho rápido para visualizar logs dos serviços
+docker compose logs -f "$@"

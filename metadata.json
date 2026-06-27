@@ -1,0 +1,6 @@
+{
+  "name": "Orquestrador de Ambiente Local",
+  "description": "Painel e orquestrador de ambiente de desenvolvimento local baseado em Docker Compose, com suporte a múltiplas stacks e roteamento via Nginx Proxy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

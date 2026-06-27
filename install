@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# install — Script principal de instalação e orquestração do ambiente local
+
+# Cores
+export RED='\033[0;31m'
+export GREEN='\033[0;32m'
+export YELLOW='\033[0;33m'
+export BLUE='\033[0;34m'
+export CYAN='\033[0;36m'
+export NC='\033[0;m'
+
+# Carrega biblioteca para logs e parsing
+source "./scripts/lib.sh"
+
+log_info "=========================================================="
+log_info "  Iniciando Instalação do Orquestrador de Desenvolvimento"
+log_info "=========================================================="
+
+# Variáveis padrão
+WITH_PROJECTS=""
+FORCE_ENVS=0
+NO_CLONE=0
+FORCE_RESET=0
+
+# Processa argumentos do instalador
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --with) WITH_PROJECTS="$2"; shift ;;
+        --force-envs) FORCE_ENVS=1 ;;
+        --no-clone) NO_CLONE=1 ;;
+        --force-reset) FORCE_RESET=1 ;;
+        -h|--help)
+            echo "Uso: ./install [opções]"
+            echo ""
+            echo "Opções:"
+            echo "  --with <projetos>    Lista separada por vírgulas de projetos com 'default: false' a incluir."
+            echo "  --force-envs         Sobrescreve os arquivos .env dos projetos com os arquivos .env.example."
+            echo "  --no-clone           Pula a etapa de clonagem de repositórios Git."
+            echo "  --force-reset        Força git reset --hard nos projetos existentes para redefinir alterações locais."
+            echo ""
+            exit 0
+            ;;
+    esac
+    shift
+done
+
+# Executa cada script na sequência correta
+bash ./scripts/10-check-deps.sh
+if [ $? -ne 0 ]; then
+    log_error "Erro na verificação de dependências. Abortando instalação."
+    exit 1
+fi
+
+CLONE_ARGS=""
+if [ "$NO_CLONE" -eq 1 ]; then CLONE_ARGS="${CLONE_ARGS} --no-clone"; fi
+if [ "$FORCE_RESET" -eq 1 ]; then CLONE_ARGS="${CLONE_ARGS} --force-reset"; fi
+if [ -n "$WITH_PROJECTS" ]; then CLONE_ARGS="${CLONE_ARGS} --with ${WITH_PROJECTS}"; fi
+
+bash ./scripts/20-clone.sh $CLONE_ARGS
+if [ $? -ne 0 ]; then
+    log_error "Erro na clonagem/atualização de projetos. Abortando instalação."
+    exit 1
+fi
+
+ENV_ARGS=""
+if [ "$FORCE_ENVS" -eq 1 ]; then ENV_ARGS="${ENV_ARGS} --force-envs"; fi
+if [ -n "$WITH_PROJECTS" ]; then ENV_ARGS="${ENV_ARGS} --with ${WITH_PROJECTS}"; fi
+
+bash ./scripts/30-envs.sh $ENV_ARGS
+if [ $? -ne 0 ]; then
+    log_error "Erro na configuração dos arquivos .env. Abortando instalação."
+    exit 1
+fi
+
+bash ./scripts/40-hosts.sh
+if [ $? -ne 0 ]; then
+    log_warn "Aviso na atualização do arquivo /etc/hosts (pode exigir permissão manual)."
+fi
+
+bash ./scripts/50-gen-env.sh
+if [ $? -ne 0 ]; then
+    log_error "Erro ao compilar o arquivo .env global. Abortando instalação."
+    exit 1
+fi
+
+# Tenta expor de forma idempotente scripts/uteis no PATH do usuário (~/.bashrc ou ~/.zshrc)
+add_to_path() {
+    local rc_file="$1"
+    local path_line='export PATH="$PATH:$(pwd)/scripts/uteis"'
+    if [ -f "$rc_file" ]; then
+        if ! grep -q "scripts/uteis" "$rc_file"; then
+            echo -e "\n# Orquestrador de Desenvolvimento Local" >> "$rc_file"
+            echo "$path_line" >> "$rc_file"
+            log_success "Adicionado scripts/uteis ao PATH em ${rc_file}"
+        fi
+    fi
+}
+
+add_to_path "$HOME/.bashrc"
+add_to_path "$HOME/.zshrc"
+
+log_success "=========================================================="
+log_success "  INSTALAÇÃO CONCLUÍDA COM SUCESSO!"
+log_success "=========================================================="
+echo ""
+echo -e "Você já pode iniciar o seu ambiente rodando:"
+echo -e "  ${CYAN}docker compose up -d${NC}   (ou se adicionou ao PATH: ${CYAN}dev-up${NC})"
+echo ""
+echo -e "Serviços disponíveis:"
+
+# Lista os domínios mapeados no terminal
+PROJECTS_RAW=$(parse_projects_yml)
+for row in $PROJECTS_RAW; do
+    IFS='|' read -r name group repo stack host port with_db db_engine default php_version node_version env_example <<< "$row"
+    
+    # Ignora os não padrões se não foram requisitados
+    SHOULD_SHOW=0
+    if [ "$default" = "true" ]; then
+        SHOULD_SHOW=1
+    elif [[ "$WITH_PROJECTS" =~ (^|,)"$name"(,|$) ]]; then
+        SHOULD_SHOW=1
+    fi
+    
+    if [ "$SHOULD_SHOW" -eq 1 ] && [ -n "$host" ]; then
+        echo -e "  - ${GREEN}${name}${NC}: http://${host}"
+    fi
+done
+echo -e "  - ${GREEN}phpmyadmin${NC}: http://phpmyadmin.local"
+echo ""
+echo -e "Use ${CYAN}dev-ls${NC} para ver todos os detalhes dos serviços."

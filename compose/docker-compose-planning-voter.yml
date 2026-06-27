@@ -1,0 +1,24 @@
+services:
+  #####COMMENT: Sistema de votação em tempo real para planejamento ágil #####ENDCOMMENT
+  planning-voter:
+    container_name: planning-voter
+    image: node:20
+    working_dir: /app
+    command: bash -c "yarn install && yarn dev --host --port 8001"
+    depends_on:
+      - nginx-proxy
+    volumes:
+      - ./mnt/pessoal/planning-voter:/app
+      - /app/node_modules
+    environment:
+      - VIRTUAL_HOST=planning-voter.local
+      - VIRTUAL_PORT=8001
+      - APP_ENV=local
+    env_file:
+      - ./mnt/pessoal/planning-voter/.env
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    name: dev-network

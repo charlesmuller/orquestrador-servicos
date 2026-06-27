@@ -1,0 +1,23 @@
+services:
+  #####COMMENT: API do blog pessoal e publicador de conteúdos em PHP #####ENDCOMMENT
+  blog:
+    container_name: blog
+    image: ${PHP_82_IMAGE:-webdevops/php-nginx:8.2}
+    environment:
+      - VIRTUAL_HOST=blog.local
+      - VIRTUAL_PORT=80
+      - APP_ENV=local
+      - WEB_DOCUMENT_ROOT=/app/public
+      - TZ=America/Sao_Paulo
+    volumes:
+      - ./mnt/pessoal/blog:/app
+    env_file:
+      - ./mnt/pessoal/blog/.env
+    networks:
+      - dev-network
+    depends_on:
+      - nginx-proxy
+
+networks:
+  dev-network:
+    name: dev-network

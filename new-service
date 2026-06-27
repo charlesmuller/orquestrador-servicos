@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# new-service — CLI de scaffold interativo para cadastrar novos serviços
+
+# Cores
+export RED='\033[0;31m'
+export GREEN='\033[0;32m'
+export YELLOW='\033[0;33m'
+export BLUE='\033[0;34m'
+export CYAN='\033[0;36m'
+export NC='\033[0;m'
+
+echo -e "${CYAN}====================================================${NC}"
+echo -e "${CYAN}    Scaffold de Novo Serviço - Orquestrador Local   ${NC}"
+echo -e "${CYAN}====================================================${NC}"
+echo ""
+
+# Pergunta nome do serviço
+read -p "Nome do serviço (ex: minha-api): " NAME
+if [ -z "$NAME" ]; then
+    echo -e "${RED}[ERROR] O nome é obrigatório!${NC}"
+    exit 1
+fi
+
+# Pergunta URL do repositório Git
+read -p "URL do repositório Git (ex: git@github.com:user/repo.git): " REPO
+if [ -z "$REPO" ]; then
+    echo -e "${RED}[ERROR] A URL do repositório é obrigatória!${NC}"
+    exit 1
+fi
+
+# Pergunta o grupo (para mnt/<grupo>/<nome>)
+read -p "Grupo/Pasta raiz do projeto (ex: backend, pessoal): " GROUP
+if [ -z "$GROUP" ]; then
+    GROUP="pessoal"
+fi
+
+# Pergunta a stack
+echo "Escolha a stack do projeto:"
+echo " 1) Node.js (Frontend, APIs Node, Vue, React, Vite)"
+echo " 2) PHP (Laravel, Symfony, APIs PHP, Nginx/FPM)"
+read -p "Opção (1-2): " STACK_OPT
+
+if [ "$STACK_OPT" = "2" ]; then
+    STACK="php"
+    read -p "Versão do PHP (padrão: 8.2): " PHP_VER
+    if [ -z "$PHP_VER" ]; then PHP_VER="8.2"; fi
+    
+    # Pergunta sobre banco dedicado
+    read -p "Requer container de banco de dados dedicado? (y/N): " WITH_DB_OPT
+    if [[ "$WITH_DB_OPT" =~ ^[Yy]$ ]]; then
+        WITH_DB="true"
+        read -p "Qual banco de dados? (mysql/postgres, padrão mysql): " DB_ENGINE
+        if [ -z "$DB_ENGINE" ]; then DB_ENGINE="mysql"; fi
+    else
+        WITH_DB="false"
+        DB_ENGINE=""
+    fi
+else
+    STACK="node"
+    read -p "Framework utilizado (vite/vue-cli/other, padrão vite): " FRAMEWORK
+    if [ -z "$FRAMEWORK" ]; then FRAMEWORK="vite"; fi
+    
+    read -p "Versão do Node.js (padrão: 20): " NODE_VER
+    if [ -z "$NODE_VER" ]; then NODE_VER="20"; fi
+    
+    read -p "Porta do dev server local (ex: 8003): " PORT
+    if [ -z "$PORT" ]; then PORT="8003"; fi
+fi
+
+# Pergunta hostname
+read -p "Hostname virtual de desenvolvimento (ex: ${NAME}.local): " HOSTNAME
+if [ -z "$HOSTNAME" ]; then
+    HOSTNAME="${NAME}.local"
+fi
+
+# Pergunta descrição do serviço
+read -p "Breve descrição do que este serviço faz: " DESCRIPTION
+if [ -z "$DESCRIPTION" ]; then
+    DESCRIPTION="Serviço ${NAME} rodando na stack ${STACK}"
+fi
+
+# Caminho relativo do .env.example
+read -p "Caminho relativo do .env.example (opcional, padrão: raiz): " ENV_EX
+if [ -z "$ENV_EX" ]; then
+    ENV_EX=""
+fi
+
+# Salva no projects.yml de forma padronizada
+echo "" >> projects.yml
+echo "  - name: ${NAME}" >> projects.yml
+echo "    repo: ${REPO}" >> projects.yml
+echo "    group: ${GROUP}" >> projects.yml
+echo "    stack: ${STACK}" >> projects.yml
+
+if [ "$STACK" = "php" ]; then
+    echo "    php_version: \"${PHP_VER}\"" >> projects.yml
+    echo "    host: ${HOSTNAME}" >> projects.yml
+    echo "    with_db: ${WITH_DB}" >> projects.yml
+    if [ "$WITH_DB" = "true" ]; then
+        echo "    db_engine: ${DB_ENGINE}" >> projects.yml
+    fi
+else
+    echo "    framework: ${FRAMEWORK}" >> projects.yml
+    echo "    node_version: \"${NODE_VER}\"" >> projects.yml
+    echo "    host: ${HOSTNAME}" >> projects.yml
+    echo "    port: ${PORT}" >> projects.yml
+fi
+
+if [ -n "$ENV_EX" ]; then
+    echo "    env_example: ${ENV_EX}" >> projects.yml
+fi
+echo "    default: true" >> projects.yml
+
+log_success "Projeto '${NAME}' registrado com sucesso no manifesto 'projects.yml'!"
+
+# Gera o arquivo docker-compose-*.yml correspondente na pasta compose/
+mkdir -p compose
+
+COMPOSE_FILE="compose/docker-compose-${NAME}.yml"
+
+if [ "$STACK" = "php" ]; then
+    # Template PHP
+    cat <<EOF > "$COMPOSE_FILE"
+services:
+  #####COMMENT: ${DESCRIPTION} #####ENDCOMMENT
+  ${NAME}:
+    container_name: ${NAME}
+    image: \${PHP_${PHP_VER//./}_IMAGE:-webdevops/php-nginx:${PHP_VER}}
+    environment:
+      - VIRTUAL_HOST=${HOSTNAME}
+      - VIRTUAL_PORT=80
+      - APP_ENV=local
+      - WEB_DOCUMENT_ROOT=/app/public
+      - TZ=America/Sao_Paulo
+    volumes:
+      - ./mnt/${GROUP}/${NAME}:/app
+    env_file:
+      - ./mnt/${GROUP}/${NAME}/.env
+    networks:
+      - dev-network
+    depends_on:
+      - nginx-proxy
+EOF
+
+    # Se tiver banco dedicado, adiciona ao compose
+    if [ "$WITH_DB" = "true" ]; then
+        if [ "$DB_ENGINE" = "postgres" ]; then
+            cat <<EOF >> "$COMPOSE_FILE"
+      - ${NAME}-db
+
+  ${NAME}-db:
+    container_name: ${NAME}-db
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: ${NAME}
+    volumes:
+      - ${NAME}-db-data:/var/lib/postgresql/data
+    networks:
+      - dev-network
+
+volumes:
+  ${NAME}-db-data:
+EOF
+        else
+            cat <<EOF >> "$COMPOSE_FILE"
+      - ${NAME}-db
+
+  ${NAME}-db:
+    container_name: ${NAME}-db
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: devpassword
+      MYSQL_DATABASE: ${NAME}
+    volumes:
+      - ${NAME}-db-data:/var/lib/mysql
+    networks:
+      - dev-network
+
+volumes:
+  ${NAME}-db-data:
+EOF
+        fi
+    fi
+
+    # Adiciona a rede comum ao compose
+    cat <<EOF >> "$COMPOSE_FILE"
+
+networks:
+  dev-network:
+    name: dev-network
+EOF
+
+else
+    # Template Node / Vue / Vite
+    CMD="yarn install && yarn dev --host --port ${PORT}"
+    ENV_HOST_VAR=""
+    if [ "$FRAMEWORK" = "vue-cli" ]; then
+        CMD="yarn install && yarn serve --port ${PORT}"
+        ENV_HOST_VAR="      - HOST=0.0.0.0"
+    fi
+
+    cat <<EOF > "$COMPOSE_FILE"
+services:
+  #####COMMENT: ${DESCRIPTION} #####ENDCOMMENT
+  ${NAME}:
+    container_name: ${NAME}
+    image: node:${NODE_VER}
+    working_dir: /app
+    command: bash -c "${CMD}"
+    depends_on:
+      - nginx-proxy
+    volumes:
+      - ./mnt/${GROUP}/${NAME}:/app
+      - /app/node_modules
+    environment:
+      - VIRTUAL_HOST=${HOSTNAME}
+      - VIRTUAL_PORT=${PORT}
+${ENV_HOST_VAR}
+    env_file:
+      - ./mnt/${GROUP}/${NAME}/.env
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    name: dev-network
+EOF
+fi
+
+log_success "Arquivo de compose gerado em: ${COMPOSE_FILE}"
+echo ""
+echo -e "O novo serviço foi cadastrado! Para aplicá-lo:"
+echo -e "  1. Execute ${CYAN}./install${NC} para recriar o arquivo .env consolidado."
+echo -e "  2. Inicie o serviço rodando ${CYAN}docker compose up -d ${NAME}${NC}"
+echo ""

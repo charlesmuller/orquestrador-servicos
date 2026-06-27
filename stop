@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# stop — Desliga todos os serviços do orquestrador local
+
+# Cores
+export RED='\033[0;31m'
+export GREEN='\033[0;32m'
+export BLUE='\033[0;34m'
+export NC='\033[0;m'
+
+echo -e "${BLUE}[INFO] Parando todos os serviços e limpando redes comuns...${NC}"
+
+if [ -f .env ]; then
+    docker compose down "$@"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}[OK] Todos os serviços foram derrubados com sucesso!${NC}"
+    else
+        echo -e "${RED}[ERROR] Ocorreu um erro ao parar os serviços. Certifique-se de que o Docker está rodando.${NC}"
+    fi
+else
+    echo -e "${RED}[ERROR] Arquivo .env global não encontrado! Execute './install' primeiro.${NC}"
+fi

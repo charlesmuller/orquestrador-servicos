@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# scripts/uteis/dev-ls — Lista os serviços disponíveis e suas finalidades
+
+# Cores
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0;m'
+
+echo -e "${BLUE}=== Serviços Cadastrados no Orquestrador ===${NC}"
+echo -e "--------------------------------------------------------"
+
+# Lista primeiro os serviços do docker-compose.yml base (como nginx-proxy, etc.)
+echo -e "${GREEN}• nginx-proxy${NC} (Roteador central que escuta nas portas 80/443)"
+echo -e "${GREEN}• mysql-central${NC} (Banco de dados MySQL compartilhado)"
+echo -e "${GREEN}• postgres-central${NC} (Banco de dados PostgreSQL compartilhado)"
+echo -e "${GREEN}• phpmyadmin${NC} (Visualizador de banco MySQL - phpmyadmin.local)"
+echo -e "--------------------------------------------------------"
+
+if [ -d "compose" ] && [ "$(ls -A compose 2>/dev/null)" ]; then
+    for file in compose/docker-compose-*.yml; do
+        [ -f "$file" ] || continue
+        
+        # Extrai o nome do serviço a partir do nome do arquivo
+        service_name=$(basename "$file" | sed 's/docker-compose-//' | sed 's/\.yml//')
+        
+        # Extrai o comentário sentinela
+        comment=""
+        if grep -q "#####COMMENT:" "$file"; then
+            comment=$(grep "#####COMMENT:" "$file" | head -n 1 | sed -E 's/.*#####COMMENT:[[:space:]]*//' | sed -E 's/[[:space:]]*#####ENDCOMMENT.*//')
+        fi
+        
+        if [ -z "$comment" ]; then
+            comment="Nenhuma descrição fornecida."
+        fi
+        
+        # Extrai os domínios virtuais se houverem
+        hosts=$(grep "VIRTUAL_HOST=" "$file" | sed -E 's/.*VIRTUAL_HOST=//' | xargs)
+        
+        echo -e "${CYAN}• ${service_name}${NC}"
+        echo -e "  Descrição: ${comment}"
+        if [ -n "$hosts" ]; then
+            echo -e "  Domínio:   ${YELLOW}http://${hosts}${NC}"
+        fi
+        echo -e "  Arquivo:   ${file}"
+        echo -e "--------------------------------------------------------"
+    done
+else
+    echo -e "${YELLOW}Nenhum serviço personalizado gerado em compose/. Rode './install' para criar os composes de seus projetos.${NC}"
+fi

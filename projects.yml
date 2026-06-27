@@ -1,0 +1,30 @@
+# projects.yml — fonte de verdade de todos os projetos do ambiente
+projects:
+  - name: planning-voter
+    repo: git@github.com:charlesmuller/planning-voter.git
+    group: pessoal
+    stack: node
+    framework: vite
+    node_version: "20"
+    host: planning-voter.local
+    port: 8001
+    default: true
+
+  - name: blog
+    repo: git@github.com:charlesmuller/blog.git
+    group: pessoal
+    stack: php
+    php_version: "8.2"
+    host: blog.local
+    with_db: false
+    default: true
+
+  - name: site
+    repo: git@github.com:charlesmuller/site-frontend.git
+    group: pessoal
+    stack: node
+    framework: vite
+    node_version: "18"
+    host: site.local
+    port: 8002
+    default: true

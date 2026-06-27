@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# scripts/uteis/dev-reset-db — Remove e recria um banco de dados específico do zero
+
+if [ -z "$1" ]; then
+    echo -e "\033[0;31m[ERROR] Por favor, informe o nome do serviço de banco de dados (ex: meu-projeto-db).\033[0;m"
+    echo "Uso: dev-reset-db <nome-do-container-db>"
+    exit 1
+fi
+
+DB_SERVICE="$1"
+
+echo -e "\033[0;33m[WARN] ATENÇÃO: Isso irá apagar todos os dados do banco de dados '${DB_SERVICE}'!\033[0;m"
+read -p "Deseja continuar? (y/N) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "\033[0;34m[INFO] Parando e removendo container e volumes de '${DB_SERVICE}'...\033[0;m"
+    docker compose rm -sfv "$DB_SERVICE"
+    
+    echo -e "\033[0;34m[INFO] Recriando e iniciando '${DB_SERVICE}'...\033[0;m"
+    docker compose up -d "$DB_SERVICE"
+    
+    echo -e "\033[0;32m[OK] Banco de dados '${DB_SERVICE}' reiniciado com sucesso do zero!\033[0;m"
+else
+    echo "Operação cancelada pelo usuário."
+fi

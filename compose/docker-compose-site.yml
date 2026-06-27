@@ -1,0 +1,24 @@
+services:
+  #####COMMENT: Front-end oficial do site pessoal feito em Vue e Vite #####ENDCOMMENT
+  site:
+    container_name: site
+    image: node:18
+    working_dir: /app
+    command: bash -c "yarn install && yarn dev --host --port 8002"
+    depends_on:
+      - nginx-proxy
+    volumes:
+      - ./mnt/pessoal/site:/app
+      - /app/node_modules
+    environment:
+      - VIRTUAL_HOST=site.local
+      - VIRTUAL_PORT=8002
+      - APP_ENV=local
+    env_file:
+      - ./mnt/pessoal/site/.env
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    name: dev-network

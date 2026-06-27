@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# scripts/uteis/dev-up — Atalho rápido para levantar serviços do docker compose
+docker compose up -d "$@"

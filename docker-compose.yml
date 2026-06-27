@@ -1,0 +1,75 @@
+# docker-compose.yml — Infraestrutura centralizada compartilhada
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy:latest
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    restart: always
+    networks:
+      - dev-network
+
+  # MySQL Central compartilhado para múltiplos serviços
+  mysql-central:
+    image: mysql:8.0
+    container_name: mysql-central
+    restart: on-failure
+    environment:
+      MYSQL_ROOT_PASSWORD: devpassword
+    volumes:
+      - mysql-central-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - dev-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL Central compartilhado para múltiplos serviços
+  postgres-central:
+    image: postgres:15
+    container_name: postgres-central
+    restart: on-failure
+    environment:
+      POSTGRES_PASSWORD: devpassword
+    volumes:
+      - postgres-central-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # phpMyAdmin para gerenciar bancos MySQL locais facilmente
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: phpmyadmin
+    restart: on-failure
+    depends_on:
+      mysql-central:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql-central
+      VIRTUAL_HOST: phpmyadmin.local
+      VIRTUAL_PORT: 80
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    name: dev-network
+    driver: bridge
+
+volumes:
+  mysql-central-data:
+  postgres-central-data:
