@@ -3,13 +3,13 @@ services:
   planning-voter:
     container_name: planning-voter
     image: node:20
-    working_dir: /app
+    working_dir: /app/client
     command: bash -c "yarn install && yarn dev --host --port 8001"
     depends_on:
       - nginx-proxy
     volumes:
       - ./mnt/pessoal/planning-voter:/app
-      - /app/node_modules
+      - /app/client/node_modules
     environment:
       - VIRTUAL_HOST=planning-voter.local
       - VIRTUAL_PORT=8001

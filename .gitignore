@@ -8,3 +8,4 @@ coverage/
 !.env.example
 dev-server.cjs
 dev-server.cjs.map
+mnt/

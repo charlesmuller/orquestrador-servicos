@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { exec } from "child_process";
-import { createServer as createViteServer } from "vite";
 import { parse, stringify } from "yaml";
 
 const app = express();
@@ -42,6 +41,7 @@ app.post("/api/projects", (req, res) => {
       db_engine,
       description,
       env_example,
+      subdir,
     } = req.body;
 
     if (!name || !repo) {
@@ -82,6 +82,9 @@ app.post("/api/projects", (req, res) => {
       newProject.node_version = node_version || "20";
       newProject.host = host || `${name}.local`;
       newProject.port = port ? parseInt(port, 10) : 8003;
+      if (subdir) {
+        newProject.subdir = subdir;
+      }
     }
 
     if (env_example) {
@@ -172,6 +175,7 @@ networks:
     name: dev-network
 `;
     } else {
+      const subdirPath = subdir ? `/${subdir}` : "";
       const cmd = framework === "vue-cli" 
         ? `yarn install && yarn serve --port ${port || 8003}` 
         : `yarn install && yarn dev --host --port ${port || 8003}`;
@@ -183,13 +187,13 @@ networks:
   ${name}:
     container_name: ${name}
     image: node:${node_version || "20"}
-    working_dir: /app
+    working_dir: /app${subdirPath}
     command: bash -c "${cmd}"
     depends_on:
       - nginx-proxy
     volumes:
       - ./mnt/${group || "pessoal"}/${name}:/app
-      - /app/node_modules
+      - /app${subdirPath}/node_modules
     environment:
       - VIRTUAL_HOST=${host || `${name}.local`}
       - VIRTUAL_PORT=${port || 8003}${hostEnv}
@@ -316,6 +320,7 @@ app.post("/api/run-script", (req, res) => {
 async function startServer() {
   // Configura Vite middleware para desenvolvimento, senão serve arquivos estáticos na build
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
